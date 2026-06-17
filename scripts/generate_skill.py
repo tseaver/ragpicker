@@ -17,6 +17,10 @@ embedded database and the runtime always agree:
   that last wrote it) and pinned as-is — no migration required.
 * With ``--haiku-rag-version X`` the version is **forced**: it is pinned in the
   wrapper and the embedded copy of the database is migrated up to ``X``.
+* With ``--version-from-project PATH`` the version is **discovered** from a
+  target project (e.g. a Soliplex stack) — its ``.venv`` or ``pyproject.toml`` —
+  and forced the same way, so the embedded database matches the runtime that
+  will open it.
 
 Usage:
 
@@ -24,14 +28,14 @@ Usage:
         --config path/to/haiku.rag.yaml \\
         --db path/to/handbook.lancedb \\
         [--output DIR] \\
-        [--haiku-rag-version 0.48.1] \\
-        [--package-name haiku-rag-slim]
+        [--haiku-rag-version 0.48.1 | --version-from-project path/to/stack]
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -40,7 +44,11 @@ from pathlib import Path
 PLACEHOLDER = "[dbname]"
 REQUIREMENT_PLACEHOLDER = "[hr_requirement]"
 LANCEDB_SUFFIX = ".lancedb"
-DEFAULT_PACKAGE = "haiku-rag-slim"
+
+# The only distribution the generated wrapper pins. The full ``haiku-rag`` build
+# is intentionally unsupported -- its dependency weight is prohibitive for a
+# self-contained skill -- so the slim repackaging is hardcoded.
+PACKAGE = "haiku-rag-slim"
 
 # The minimum haiku-rag version the bundled wrapper supports. The wrapper relies
 # on APIs (expand_context, resolve_citations, format_for_agent, ...) whose stable
@@ -90,6 +98,87 @@ def sniff_db_version(db_path: Path) -> str | None:
             version = json.loads(row["settings"]).get("version")
             return version or None
     return None
+
+
+def _venv_site_packages(venv: Path):
+    """Yield the ``site-packages`` directories of a virtualenv (POSIX + Windows)."""
+    yield from venv.glob("lib/python*/site-packages")
+    windows = venv / "Lib" / "site-packages"
+    if windows.is_dir():
+        yield windows
+
+
+def _version_from_venv(venv: Path, dist: str) -> str | None:
+    """Return ``dist``'s installed version in ``venv`` from its ``.dist-info``.
+
+    Reads the canonical ``<escaped_name>-<version>.dist-info`` directory name,
+    so it does not need to run the (possibly foreign) venv's interpreter.
+    """
+    escaped = dist.replace("-", "_")
+    for site_packages in _venv_site_packages(venv):
+        for dist_info in site_packages.glob(f"{escaped}-*.dist-info"):
+            stem = dist_info.name[: -len(".dist-info")]
+            return stem[len(escaped) + 1 :]
+    return None
+
+
+def _version_from_uv_tree(project_dir: Path, dist: str) -> str | None:
+    """Return ``dist``'s resolved version via ``uv tree`` in ``project_dir``.
+
+    ``uv tree --package <dist> --depth 0`` renders the package's resolved node
+    as ``<dist> v<version>``. This works even when ``dist`` is a *transitive*
+    dependency (e.g. ``haiku-rag-slim`` pulled in by ``soliplex``) and resolves
+    version ranges to the concrete version uv would install. Returns None when
+    ``uv`` is unavailable or the package is absent from the resolution.
+    """
+    uv = shutil.which("uv")
+    if uv is None:
+        return None
+    result = subprocess.run(
+        [uv, "tree", "--package", dist, "--depth", "0"],
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        match = re.match(rf"{re.escape(dist)}\s+v(\S+)", line.strip())
+        if match:
+            return match.group(1)
+    return None
+
+
+def version_from_project(project_dir: Path, dist: str = PACKAGE) -> str:
+    """Discover the effective ``dist`` version from a target project directory.
+
+    Prefers an installed ``.venv`` (the *effective* version actually present);
+    falls back to resolving the project's dependencies with ``uv tree`` (which
+    handles ``dist`` being a transitive dependency or pinned to a range). Raises
+    ``GenerateError`` when neither yields a concrete version.
+    """
+    if not project_dir.exists():
+        raise GenerateError(
+            f"--version-from-project path does not exist: {project_dir}"
+        )
+
+    venv = project_dir / ".venv"
+    if venv.is_dir():
+        version = _version_from_venv(venv, dist)
+        if version:
+            return version
+
+    pyproject = project_dir / "pyproject.toml"
+    if pyproject.is_file():
+        version = _version_from_uv_tree(project_dir, dist)
+        if version:
+            return version
+
+    raise GenerateError(
+        f"could not determine an effective '{dist}' version from {project_dir} "
+        f"(looked for a '.venv' with it installed, then resolved the project's "
+        f"dependencies with 'uv tree'); pass --haiku-rag-version explicitly"
+    )
 
 
 def validate_inputs(db_path: Path, config_path: Path, target: Path) -> None:
@@ -198,7 +287,6 @@ def generate_skill(
     output_dir: Path,
     *,
     haiku_rag_version: str | None = None,
-    package_name: str = DEFAULT_PACKAGE,
 ) -> Path:
     """Generate the skill and return the path to the created skill directory."""
     from packaging.version import InvalidVersion, Version
@@ -209,7 +297,7 @@ def generate_skill(
     validate_inputs(db_path, config_path, target)
 
     version, sniffed = resolve_version(db_path, haiku_rag_version)
-    requirement = f"{package_name}=={version}"
+    requirement = f"{PACKAGE}=={version}"
 
     # Enforce the wrapper's minimum supported version: the API surface it uses
     # is not guaranteed below MINIMUM_VERSION.
@@ -284,7 +372,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("."),
         help="Directory to create the skill in (default: current directory)",
     )
-    parser.add_argument(
+    version_source = parser.add_mutually_exclusive_group()
+    version_source.add_argument(
         "--haiku-rag-version",
         default=None,
         help="Force this haiku-rag version: pin it in the wrapper and migrate "
@@ -294,10 +383,15 @@ def build_parser() -> argparse.ArgumentParser:
         "script with the backend's Python interpreter (not uv), so the embedded "
         "database must match that version rather than the wrapper's pin.",
     )
-    parser.add_argument(
-        "--package-name",
-        default=DEFAULT_PACKAGE,
-        help=f"Distribution to pin in the wrapper (default: {DEFAULT_PACKAGE})",
+    version_source.add_argument(
+        "--version-from-project",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Discover the haiku-rag version to force from a target project "
+        "(e.g. a Soliplex stack): reads its '.venv' (the effective installed "
+        "version), else resolves its dependencies with 'uv tree'. A convenient "
+        "way to match the deployment backend without typing the version by hand.",
     )
     return parser
 
@@ -305,18 +399,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        forced = args.haiku_rag_version
+        if args.version_from_project is not None:
+            forced = version_from_project(args.version_from_project)
         target = generate_skill(
             args.db,
             args.config,
             args.output,
-            haiku_rag_version=args.haiku_rag_version,
-            package_name=args.package_name,
+            haiku_rag_version=forced,
         )
     except GenerateError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Skill generated: {target}")
-    version, _ = resolve_version(args.db, args.haiku_rag_version)
+    version, _ = resolve_version(args.db, forced)
     print(
         f"Embedded database pinned to haiku-rag {version}. When deploying to an "
         f"embedding host such as Soliplex, ensure the backend's installed "

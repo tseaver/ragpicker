@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -141,21 +142,6 @@ def test_generate_skill_pins_forced_version_in_wrapper(
     wrapper = (target / "scripts" / "haiku_rag.py").read_text(encoding="utf-8")
     assert 'dependencies = ["haiku-rag-slim==0.48.1"]' in wrapper
     assert "[hr_requirement]" not in wrapper
-
-
-def test_generate_skill_pins_custom_package_name(
-    fake_db, fake_config, output_dir
-):
-    target = generate_skill.generate_skill(
-        fake_db,
-        fake_config,
-        output_dir,
-        haiku_rag_version="0.48.1",
-        package_name="haiku-rag",
-    )
-
-    wrapper = (target / "scripts" / "haiku_rag.py").read_text(encoding="utf-8")
-    assert 'dependencies = ["haiku-rag==0.48.1"]' in wrapper
 
 
 def test_generate_skill_pins_sniffed_version_by_default(
@@ -395,3 +381,148 @@ def test_haiku_rag_version_help_mentions_backend():
     help_text = parser.format_help().lower()
     assert "backend" in help_text
     assert "soliplex" in help_text
+
+
+@pytest.fixture
+def make_project(tmp_path):
+    """Factory for a project dir with an optional ``.venv`` and/or pyproject pin."""
+    created: list[Path] = []
+
+    def _make(*, venv_version: str | None = None, pyproject_req: str | None = None):
+        root = tmp_path / f"proj{len(created)}"
+        root.mkdir()
+        created.append(root)
+        if venv_version is not None:
+            site_packages = root / ".venv" / "lib" / "python3.13" / "site-packages"
+            site_packages.mkdir(parents=True)
+            (site_packages / f"haiku_rag_slim-{venv_version}.dist-info").mkdir()
+        if pyproject_req is not None:
+            (root / "pyproject.toml").write_text(
+                '[project]\nname = "x"\nversion = "0"\n'
+                f'dependencies = ["{pyproject_req}"]\n',
+                encoding="utf-8",
+            )
+        return root
+
+    return _make
+
+
+def test_version_from_project_reads_venv_dist_info(make_project):
+    project = make_project(venv_version="0.49.2")
+
+    version = generate_skill.version_from_project(project)
+
+    assert version == "0.49.2"
+
+
+def test_version_from_project_resolves_pyproject_via_uv_tree(
+    make_project, monkeypatch
+):
+    project = make_project(pyproject_req="haiku-rag-slim>=0.48")
+    monkeypatch.setattr(
+        generate_skill, "_version_from_uv_tree", lambda d, dist: "0.50.0"
+    )
+
+    version = generate_skill.version_from_project(project)
+
+    assert version == "0.50.0"
+
+
+def test_version_from_project_prefers_venv_over_uv_tree(make_project, monkeypatch):
+    project = make_project(
+        venv_version="0.49.2", pyproject_req="haiku-rag-slim==0.50.0"
+    )
+    monkeypatch.setattr(
+        generate_skill,
+        "_version_from_uv_tree",
+        lambda d, dist: pytest.fail("uv tree should not run when .venv resolves"),
+    )
+
+    version = generate_skill.version_from_project(project)
+
+    assert version == "0.49.2"
+
+
+def test_version_from_uv_tree_parses_resolved_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_skill.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(
+        generate_skill.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(
+            a[0], 0, stdout="haiku-rag-slim v0.51.0\n", stderr=""
+        ),
+    )
+
+    version = generate_skill._version_from_uv_tree(tmp_path, "haiku-rag-slim")
+
+    assert version == "0.51.0"
+
+
+def test_version_from_uv_tree_returns_none_on_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(generate_skill.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(
+        generate_skill.subprocess,
+        "run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout="", stderr="x"),
+    )
+
+    version = generate_skill._version_from_uv_tree(tmp_path, "haiku-rag-slim")
+
+    assert version is None
+
+
+def test_version_from_project_errors_when_undeterminable(make_project):
+    project = make_project()
+
+    with pytest.raises(generate_skill.GenerateError, match="could not determine"):
+        generate_skill.version_from_project(project)
+
+
+def test_version_from_project_errors_when_path_missing(tmp_path):
+    missing = tmp_path / "nope"
+
+    with pytest.raises(generate_skill.GenerateError, match="does not exist"):
+        generate_skill.version_from_project(missing)
+
+
+def test_main_version_from_project_forces_discovered_version(
+    fake_db, fake_config, output_dir, make_project, capsys
+):
+    project = make_project(venv_version="0.49.2")
+
+    status = generate_skill.main(
+        [
+            "--config",
+            str(fake_config),
+            "--db",
+            str(fake_db),
+            "--output",
+            str(output_dir),
+            "--version-from-project",
+            str(project),
+        ]
+    )
+
+    assert status == 0
+    wrapper = (
+        output_dir / "handbook-haiku-rag" / "scripts" / "haiku_rag.py"
+    ).read_text(encoding="utf-8")
+    assert 'dependencies = ["haiku-rag-slim==0.49.2"]' in wrapper
+
+
+def test_version_args_are_mutually_exclusive():
+    parser = generate_skill.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "--config",
+                "c",
+                "--db",
+                "d",
+                "--haiku-rag-version",
+                "0.48.1",
+                "--version-from-project",
+                "/tmp/x",
+            ]
+        )
