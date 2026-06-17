@@ -1,4 +1,4 @@
-# `gen-hr-filesystem-skill`
+# `ragpicker`
 
 Generate a self-contained, **filesystem-based** [agentskills.io](https://agentskills.io)
 skill that wraps a [`haiku-rag`](https://github.com/ggozad/haiku.rag)-built LanceDB
@@ -14,7 +14,7 @@ cite` CLI subcommand to shell out to.
 ## Generate a skill
 
 ```bash
-uv run scripts/generate_skill.py \
+uv run ragpicker \
     --config path/to/haiku.rag.yaml \
     --db path/to/handbook.lancedb \
     --output ./skills \
@@ -23,8 +23,9 @@ uv run scripts/generate_skill.py \
 
 - The skill is named from the database directory stem: `handbook.lancedb` →
   `handbook-haiku-rag`.
-- The template under `template/[dbname]-haiku-rag/` is copied with `[dbname]`
-  substituted by the stem (in path names and text-file contents).
+- The template under `src/ragpicker/template/[dbname]-haiku-rag/` (bundled as
+  package data) is copied with `[dbname]` substituted by the stem (in path names
+  and text-file contents).
 - Both the `.lancedb` database and the `haiku.rag.yaml` config are embedded under the
   skill's `assets/`.
 

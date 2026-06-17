@@ -2,18 +2,11 @@ import importlib.util
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-# Load the PEP 723 generator script as a module (it lives in scripts/, which is
-# not an importable package).
-_SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "generate_skill.py"
-_spec = importlib.util.spec_from_file_location("generate_skill", _SCRIPT)
-generate_skill = importlib.util.module_from_spec(_spec)
-sys.modules["generate_skill"] = generate_skill
-_spec.loader.exec_module(generate_skill)
+from ragpicker import generator
 
 
 @pytest.fixture
@@ -78,13 +71,13 @@ def output_dir(tmp_path):
 def test_db_stem_strips_lancedb_suffix(tmp_path, name, expected):
     db_path = tmp_path / name
 
-    stem = generate_skill.db_stem(db_path)
+    stem = generator.db_stem(db_path)
 
     assert stem == expected
 
 
 def test_sniff_db_version_returns_none_without_settings(fake_db):
-    version = generate_skill.sniff_db_version(fake_db)
+    version = generator.sniff_db_version(fake_db)
 
     assert version is None
 
@@ -92,7 +85,7 @@ def test_sniff_db_version_returns_none_without_settings(fake_db):
 def test_sniff_db_version_reads_stored_version(make_versioned_db):
     db = make_versioned_db("handbook", "0.40.0")
 
-    version = generate_skill.sniff_db_version(db)
+    version = generator.sniff_db_version(db)
 
     assert version == "0.40.0"
 
@@ -100,7 +93,7 @@ def test_sniff_db_version_reads_stored_version(make_versioned_db):
 def test_generate_skill_creates_named_skill_dir(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -111,7 +104,7 @@ def test_generate_skill_creates_named_skill_dir(
 def test_generate_skill_substitutes_placeholder_in_skill_md(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -123,7 +116,7 @@ def test_generate_skill_substitutes_placeholder_in_skill_md(
 def test_generate_skill_substitutes_db_stem_in_wrapper(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -135,7 +128,7 @@ def test_generate_skill_substitutes_db_stem_in_wrapper(
 def test_generate_skill_pins_forced_version_in_wrapper(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -149,7 +142,7 @@ def test_generate_skill_pins_sniffed_version_by_default(
 ):
     db = make_versioned_db("handbook", "0.48.1")
 
-    target = generate_skill.generate_skill(db, fake_config, output_dir)
+    target = generator.generate_skill(db, fake_config, output_dir)
 
     wrapper = (target / "scripts" / "haiku_rag.py").read_text(encoding="utf-8")
     assert 'dependencies = ["haiku-rag-slim==0.48.1"]' in wrapper
@@ -161,12 +154,12 @@ def test_generate_skill_migrates_embedded_copy_when_forcing_newer(
     db = make_versioned_db("handbook", "0.40.0")
     calls = []
     monkeypatch.setattr(
-        generate_skill,
+        generator,
         "migrate_database",
         lambda db_path, cfg, req: calls.append((db_path, req)),
     )
 
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -180,12 +173,12 @@ def test_generate_skill_does_not_migrate_when_version_matches(
     db = make_versioned_db("handbook", "0.48.1")
     calls = []
     monkeypatch.setattr(
-        generate_skill,
+        generator,
         "migrate_database",
         lambda db_path, cfg, req: calls.append(req),
     )
 
-    generate_skill.generate_skill(
+    generator.generate_skill(
         db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -197,8 +190,8 @@ def test_generate_skill_rejects_downgrade(
 ):
     db = make_versioned_db("handbook", "0.50.0")
 
-    with pytest.raises(generate_skill.GenerateError, match="downgrade"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="downgrade"):
+        generator.generate_skill(
             db, fake_config, output_dir, haiku_rag_version="0.49.0"
         )
 
@@ -208,15 +201,15 @@ def test_generate_skill_rejects_sniffed_below_minimum(
 ):
     db = make_versioned_db("handbook", "0.40.0")
 
-    with pytest.raises(generate_skill.GenerateError, match="minimum"):
-        generate_skill.generate_skill(db, fake_config, output_dir)
+    with pytest.raises(generator.GenerateError, match="minimum"):
+        generator.generate_skill(db, fake_config, output_dir)
 
 
 def test_generate_skill_rejects_forced_below_minimum(
     fake_db, fake_config, output_dir
 ):
-    with pytest.raises(generate_skill.GenerateError, match="minimum"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="minimum"):
+        generator.generate_skill(
             fake_db, fake_config, output_dir, haiku_rag_version="0.40.0"
         )
 
@@ -225,15 +218,15 @@ def test_generate_skill_errors_when_version_undeterminable(
     fake_db, fake_config, output_dir
 ):
     with pytest.raises(
-        generate_skill.GenerateError, match="could not determine"
+        generator.GenerateError, match="could not determine"
     ):
-        generate_skill.generate_skill(fake_db, fake_config, output_dir)
+        generator.generate_skill(fake_db, fake_config, output_dir)
 
 
 def test_generate_skill_embeds_database_under_assets(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -245,7 +238,7 @@ def test_generate_skill_embeds_database_under_assets(
 def test_generate_skill_embeds_config_under_assets(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -257,12 +250,12 @@ def test_generate_skill_embeds_config_under_assets(
 
 
 def test_generate_skill_omits_pycache(fake_db, fake_config, output_dir):
-    stray = generate_skill.TEMPLATE_SKILL / "scripts" / "__pycache__"
+    stray = generator.TEMPLATE_SKILL / "scripts" / "__pycache__"
     stray.mkdir(parents=True, exist_ok=True)
     (stray / "haiku_rag.cpython-313.pyc").write_bytes(b"\x00")
 
     try:
-        target = generate_skill.generate_skill(
+        target = generator.generate_skill(
             fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
         )
     finally:
@@ -278,8 +271,8 @@ def test_generate_skill_rejects_db_without_lancedb_suffix(
     bad_db = tmp_path / "handbook"
     bad_db.mkdir()
 
-    with pytest.raises(generate_skill.GenerateError, match="lancedb"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="lancedb"):
+        generator.generate_skill(
             bad_db, fake_config, output_dir, haiku_rag_version="0.48.1"
         )
 
@@ -287,8 +280,8 @@ def test_generate_skill_rejects_db_without_lancedb_suffix(
 def test_generate_skill_rejects_missing_db(fake_config, output_dir, tmp_path):
     missing_db = tmp_path / "missing.lancedb"
 
-    with pytest.raises(generate_skill.GenerateError, match="does not exist"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="does not exist"):
+        generator.generate_skill(
             missing_db, fake_config, output_dir, haiku_rag_version="0.48.1"
         )
 
@@ -296,8 +289,8 @@ def test_generate_skill_rejects_missing_db(fake_config, output_dir, tmp_path):
 def test_generate_skill_rejects_missing_config(fake_db, output_dir, tmp_path):
     missing_config = tmp_path / "absent.yaml"
 
-    with pytest.raises(generate_skill.GenerateError, match="config does not exist"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="config does not exist"):
+        generator.generate_skill(
             fake_db, missing_config, output_dir, haiku_rag_version="0.48.1"
         )
 
@@ -307,8 +300,8 @@ def test_generate_skill_rejects_existing_target(
 ):
     (output_dir / "handbook-haiku-rag").mkdir()
 
-    with pytest.raises(generate_skill.GenerateError, match="already exists"):
-        generate_skill.generate_skill(
+    with pytest.raises(generator.GenerateError, match="already exists"):
+        generator.generate_skill(
             fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
         )
 
@@ -325,7 +318,7 @@ def _load_wrapper(target: Path, name: str):
 def test_generated_wrapper_has_version_mismatch_guard(
     fake_db, fake_config, output_dir
 ):
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
 
@@ -342,7 +335,7 @@ def test_generated_wrapper_reports_version_mismatch(
     import haiku.rag.client as client_mod
     from haiku.rag.store.exceptions import MigrationRequiredError
 
-    target = generate_skill.generate_skill(
+    target = generator.generate_skill(
         fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
     )
     wrapper = _load_wrapper(target, "wrapper_mismatch")
@@ -376,7 +369,7 @@ def test_generated_wrapper_reports_version_mismatch(
 
 
 def test_haiku_rag_version_help_mentions_backend():
-    parser = generate_skill.build_parser()
+    parser = generator.build_parser()
 
     help_text = parser.format_help().lower()
     assert "backend" in help_text
@@ -410,7 +403,7 @@ def make_project(tmp_path):
 def test_version_from_project_reads_venv_dist_info(make_project):
     project = make_project(venv_version="0.49.2")
 
-    version = generate_skill.version_from_project(project)
+    version = generator.version_from_project(project)
 
     assert version == "0.49.2"
 
@@ -420,10 +413,10 @@ def test_version_from_project_resolves_pyproject_via_uv_tree(
 ):
     project = make_project(pyproject_req="haiku-rag-slim>=0.48")
     monkeypatch.setattr(
-        generate_skill, "_version_from_uv_tree", lambda d, dist: "0.50.0"
+        generator, "_version_from_uv_tree", lambda d, dist: "0.50.0"
     )
 
-    version = generate_skill.version_from_project(project)
+    version = generator.version_from_project(project)
 
     assert version == "0.50.0"
 
@@ -433,40 +426,40 @@ def test_version_from_project_prefers_venv_over_uv_tree(make_project, monkeypatc
         venv_version="0.49.2", pyproject_req="haiku-rag-slim==0.50.0"
     )
     monkeypatch.setattr(
-        generate_skill,
+        generator,
         "_version_from_uv_tree",
         lambda d, dist: pytest.fail("uv tree should not run when .venv resolves"),
     )
 
-    version = generate_skill.version_from_project(project)
+    version = generator.version_from_project(project)
 
     assert version == "0.49.2"
 
 
 def test_version_from_uv_tree_parses_resolved_version(tmp_path, monkeypatch):
-    monkeypatch.setattr(generate_skill.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(generator.shutil, "which", lambda name: "/usr/bin/uv")
     monkeypatch.setattr(
-        generate_skill.subprocess,
+        generator.subprocess,
         "run",
         lambda *a, **k: subprocess.CompletedProcess(
             a[0], 0, stdout="haiku-rag-slim v0.51.0\n", stderr=""
         ),
     )
 
-    version = generate_skill._version_from_uv_tree(tmp_path, "haiku-rag-slim")
+    version = generator._version_from_uv_tree(tmp_path, "haiku-rag-slim")
 
     assert version == "0.51.0"
 
 
 def test_version_from_uv_tree_returns_none_on_failure(tmp_path, monkeypatch):
-    monkeypatch.setattr(generate_skill.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(generator.shutil, "which", lambda name: "/usr/bin/uv")
     monkeypatch.setattr(
-        generate_skill.subprocess,
+        generator.subprocess,
         "run",
         lambda *a, **k: subprocess.CompletedProcess(a[0], 1, stdout="", stderr="x"),
     )
 
-    version = generate_skill._version_from_uv_tree(tmp_path, "haiku-rag-slim")
+    version = generator._version_from_uv_tree(tmp_path, "haiku-rag-slim")
 
     assert version is None
 
@@ -474,15 +467,15 @@ def test_version_from_uv_tree_returns_none_on_failure(tmp_path, monkeypatch):
 def test_version_from_project_errors_when_undeterminable(make_project):
     project = make_project()
 
-    with pytest.raises(generate_skill.GenerateError, match="could not determine"):
-        generate_skill.version_from_project(project)
+    with pytest.raises(generator.GenerateError, match="could not determine"):
+        generator.version_from_project(project)
 
 
 def test_version_from_project_errors_when_path_missing(tmp_path):
     missing = tmp_path / "nope"
 
-    with pytest.raises(generate_skill.GenerateError, match="does not exist"):
-        generate_skill.version_from_project(missing)
+    with pytest.raises(generator.GenerateError, match="does not exist"):
+        generator.version_from_project(missing)
 
 
 def test_main_version_from_project_forces_discovered_version(
@@ -490,7 +483,7 @@ def test_main_version_from_project_forces_discovered_version(
 ):
     project = make_project(venv_version="0.49.2")
 
-    status = generate_skill.main(
+    status = generator.main(
         [
             "--config",
             str(fake_config),
@@ -511,7 +504,7 @@ def test_main_version_from_project_forces_discovered_version(
 
 
 def test_version_args_are_mutually_exclusive():
-    parser = generate_skill.build_parser()
+    parser = generator.build_parser()
 
     with pytest.raises(SystemExit):
         parser.parse_args(

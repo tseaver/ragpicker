@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.12"
-# dependencies = ["pylance", "packaging"]
-# ///
 """Generate a filesystem-based agentskills.io skill around a haiku-rag database.
 
 Given a ``haiku.rag.yaml`` config and a ``haiku-rag``-built LanceDB database
@@ -14,17 +9,17 @@ The generated skill's wrapper pins an exact ``haiku-rag`` version so the
 embedded database and the runtime always agree:
 
 * By default the version is **sniffed** from the database itself (the version
-  that last wrote it) and pinned as-is — no migration required.
+  that last wrote it) and pinned as-is -- no migration required.
 * With ``--haiku-rag-version X`` the version is **forced**: it is pinned in the
   wrapper and the embedded copy of the database is migrated up to ``X``.
 * With ``--version-from-project PATH`` the version is **discovered** from a
-  target project (e.g. a Soliplex stack) — its ``.venv`` or ``pyproject.toml`` —
-  and forced the same way, so the embedded database matches the runtime that
+  target project (e.g. a Soliplex stack) -- its ``.venv`` or ``pyproject.toml``
+  -- and forced the same way, so the embedded database matches the runtime that
   will open it.
 
 Usage:
 
-    uv run scripts/generate_skill.py \\
+    ragpicker \\
         --config path/to/haiku.rag.yaml \\
         --db path/to/handbook.lancedb \\
         [--output DIR] \\
@@ -56,8 +51,10 @@ PACKAGE = "haiku-rag-slim"
 # older and direct the user to force-migrate the embedded database up instead.
 MINIMUM_VERSION = "0.48.1"
 
-# The placeholder skill directory inside the repo's template tree.
-TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "template"
+# The placeholder skill directory inside the bundled template tree. The template
+# ships as package data alongside this module (see pyproject's hatch config), so
+# it is found relative to ``__file__`` and travels with an installed wheel.
+TEMPLATE_ROOT = Path(__file__).resolve().parent / "template"
 TEMPLATE_SKILL = TEMPLATE_ROOT / f"{PLACEHOLDER}-haiku-rag"
 
 # Suffixes whose contents get placeholder substitution; everything else is
@@ -350,7 +347,7 @@ def generate_skill(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="generate_skill.py",
+        prog="ragpicker",
         description="Generate a filesystem skill around a haiku-rag database.",
     )
     parser.add_argument(
