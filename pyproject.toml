@@ -1,0 +1,9 @@
+[project]
+name = "gen-hr-filesystem-skill"
+version = "0.1.0"
+description = "Generate filesystem-based agentskills.io skill around a haiku-rag RAG database"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "haiku-rag-slim==0.48.1",
+]
