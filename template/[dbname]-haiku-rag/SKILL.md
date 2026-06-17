@@ -14,6 +14,13 @@ The knowledge base (a LanceDB database) and its `haiku.rag.yaml` config are
 bundled under `assets/`; the script reads them automatically. Run the script
 with `uv`, which resolves its pinned `haiku-rag` dependency on first use.
 
+> **Note for embedding hosts (e.g. Soliplex).** Some hosts run this script with
+> their own Python interpreter rather than `uv`, in which case the *host's*
+> installed `haiku-rag` opens the database (the pinned version is ignored). The
+> embedded database must be built for that version: if it isn't, the script
+> exits with an actionable `haiku-rag version mismatch` error instead of
+> returning results.
+
 ## Tools
 
 ### search

@@ -288,7 +288,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--haiku-rag-version",
         default=None,
         help="Force this haiku-rag version: pin it in the wrapper and migrate "
-        "the embedded database to it (default: sniff the database's version)",
+        "the embedded database to it (default: sniff the database's version). "
+        "Set this to the haiku-rag version installed on the DEPLOYMENT BACKEND "
+        "when targeting an embedding host such as Soliplex: it runs the skill "
+        "script with the backend's Python interpreter (not uv), so the embedded "
+        "database must match that version rather than the wrapper's pin.",
     )
     parser.add_argument(
         "--package-name",
@@ -312,6 +316,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     print(f"Skill generated: {target}")
+    version, _ = resolve_version(args.db, args.haiku_rag_version)
+    print(
+        f"Embedded database pinned to haiku-rag {version}. When deploying to an "
+        f"embedding host such as Soliplex, ensure the backend's installed "
+        f"haiku-rag matches this version: the host opens the database with its "
+        f"own interpreter (not uv), so a mismatch makes the skill fail."
+    )
     return 0
 
 

@@ -325,3 +325,73 @@ def test_generate_skill_rejects_existing_target(
         generate_skill.generate_skill(
             fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
         )
+
+
+def _load_wrapper(target: Path, name: str):
+    """Import a generated skill's ``scripts/haiku_rag.py`` as a fresh module."""
+    wrapper_path = target / "scripts" / "haiku_rag.py"
+    spec = importlib.util.spec_from_file_location(name, wrapper_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_generated_wrapper_has_version_mismatch_guard(
+    fake_db, fake_config, output_dir
+):
+    target = generate_skill.generate_skill(
+        fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
+    )
+
+    wrapper = (target / "scripts" / "haiku_rag.py").read_text(encoding="utf-8")
+    assert "class SkillError(Exception)" in wrapper
+    assert "async def open_kb(" in wrapper
+    assert "MigrationRequiredError" in wrapper
+    assert "version mismatch" in wrapper
+
+
+def test_generated_wrapper_reports_version_mismatch(
+    fake_db, fake_config, output_dir, monkeypatch, capsys
+):
+    import haiku.rag.client as client_mod
+    from haiku.rag.store.exceptions import MigrationRequiredError
+
+    target = generate_skill.generate_skill(
+        fake_db, fake_config, output_dir, haiku_rag_version="0.48.1"
+    )
+    wrapper = _load_wrapper(target, "wrapper_mismatch")
+    monkeypatch.setattr(wrapper, "load_config", lambda config_path: None)
+    monkeypatch.setattr(
+        wrapper, "asset_paths", lambda *a, **k: (Path("db"), Path("cfg"))
+    )
+
+    class _RaisingHaikuRAG:
+        def __init__(self, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            raise MigrationRequiredError(
+                "Database requires migration from 0.48.1 to 0.51.0."
+            )
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(client_mod, "HaikuRAG", _RaisingHaikuRAG)
+
+    status = wrapper.main(["search", "anything"])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert "version mismatch" in captured.err
+    assert "--haiku-rag-version" in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+
+
+def test_haiku_rag_version_help_mentions_backend():
+    parser = generate_skill.build_parser()
+
+    help_text = parser.format_help().lower()
+    assert "backend" in help_text
+    assert "soliplex" in help_text

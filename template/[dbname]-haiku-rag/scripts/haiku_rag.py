@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # The database stem is substituted by the generator from the source
@@ -45,6 +46,46 @@ def load_config(config_path: Path):
     from haiku.rag.config import AppConfig, load_yaml_config
 
     return AppConfig.model_validate(load_yaml_config(config_path))
+
+
+class SkillError(Exception):
+    """A user-facing error from running this skill (e.g. a version mismatch)."""
+
+
+@asynccontextmanager
+async def open_kb(db_path: Path, config):
+    """Open the bundled knowledge base read-only, with a clear diagnostic.
+
+    Soliplex (and other embedding hosts) run this script with their own Python
+    interpreter, not ``uv`` -- so the ``haiku-rag`` that actually opens the
+    database is the *host's* installed version, not the one pinned in this
+    script's PEP 723 metadata. When the host's version is newer than the
+    version that wrote the embedded database, ``haiku-rag`` refuses to open it
+    and raises ``MigrationRequiredError``. Translate that otherwise-silent
+    failure (it would surface to the agent as an empty result) into an
+    actionable ``SkillError``.
+    """
+    from haiku.rag.client import HaikuRAG
+
+    try:
+        from haiku.rag.store.exceptions import MigrationRequiredError
+    except ImportError:  # pragma: no cover - unexpected runtime layout
+        MigrationRequiredError = ()
+
+    try:
+        async with HaikuRAG(
+            db_path=db_path, config=config, read_only=True
+        ) as rag:
+            yield rag
+    except MigrationRequiredError as exc:
+        raise SkillError(
+            f"Embedded '{DB_STEM}' database / runtime haiku-rag version "
+            f"mismatch: {exc} Under Soliplex (and other embedding hosts), "
+            f"skill scripts run with the host's Python interpreter, so the "
+            f"host's haiku-rag must match the embedded database. Pin the host "
+            f"to the database's version, or regenerate this skill with "
+            f"'--haiku-rag-version <runtime>' to migrate the embedded copy."
+        ) from exc
 
 
 def format_citation(citation) -> str:
@@ -72,11 +113,9 @@ async def run_search(
     query: str, limit: int | None, filter: str | None
 ) -> str:
     """Hybrid-search the knowledge base and format results for an agent."""
-    from haiku.rag.client import HaikuRAG
-
     db_path, config_path = asset_paths()
     config = load_config(config_path)
-    async with HaikuRAG(db_path=db_path, config=config, read_only=True) as rag:
+    async with open_kb(db_path, config) as rag:
         results = await rag.search(query, limit=limit, filter=filter)
         results = await rag.expand_context(results)
         if not results:
@@ -94,13 +133,12 @@ async def run_cite(chunk_ids: list[str]) -> str:
     prior in-memory search state, so every chunk ID is resolved directly from
     the database.
     """
-    from haiku.rag.client import HaikuRAG
     from haiku.rag.store.models.chunk import SearchResult
     from haiku.rag.store.models.citation import resolve_citations
 
     db_path, config_path = asset_paths()
     config = load_config(config_path)
-    async with HaikuRAG(db_path=db_path, config=config, read_only=True) as rag:
+    async with open_kb(db_path, config) as rag:
         normalized = [cid.strip("[]") for cid in chunk_ids]
         synthetic: list[SearchResult] = []
         doc_cache: dict[str, object] = {}
@@ -173,12 +211,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    if args.command == "search":
-        print(asyncio.run(run_search(args.query, args.limit, args.filter)))
-    elif args.command == "cite":
-        print(asyncio.run(run_cite(args.chunk_ids)))
-    else:  # pragma: no cover - argparse enforces a valid subcommand
-        return 2
+    try:
+        if args.command == "search":
+            print(asyncio.run(run_search(args.query, args.limit, args.filter)))
+        elif args.command == "cite":
+            print(asyncio.run(run_cite(args.chunk_ids)))
+        else:  # pragma: no cover - argparse enforces a valid subcommand
+            return 2
+    except SkillError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
