@@ -231,8 +231,12 @@ def sniff_db_version(db_path: Path) -> str | None:
 
 
 def _venv_site_packages(venv: Path):
-    """``site-packages`` directories of a virtualenv (POSIX + Windows)."""
-    yield from venv.glob("lib/python*/site-packages")
+    """``site-packages`` directories of a virtualenv (POSIX + Windows).
+
+    The POSIX matches are sorted: ``Path.glob`` yields in arbitrary
+    filesystem order, so sorting gives stable, reproducible iteration.
+    """
+    yield from sorted(venv.glob("lib/python*/site-packages"))
 
     windows = venv / "Lib" / "site-packages"
 

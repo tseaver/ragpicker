@@ -191,7 +191,7 @@ def test_venv_site_packages(
 ):
     expected = []
 
-    for l_version in linux_versions:
+    for l_version in sorted(linux_versions):
         l_venv = tmp_path / "lib" / f"python{l_version}" / "site-packages"
         l_venv.mkdir(parents=True)
         expected.append(l_venv)
