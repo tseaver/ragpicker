@@ -1,0 +1,52 @@
+name: Publish docs
+
+# Builds the Zensical docs site (sources under docs/, config in zensical.toml)
+# and publishes the generated site/ to the 'gh-pages' branch. Point the
+# repository's Pages "Source" at the 'gh-pages' branch (Settings -> Pages) --
+# a one-time manual step.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'zensical.toml'
+      - '.github/workflows/docs.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Allow one publish at a time; let an in-progress run finish.
+concurrency:
+  group: publish-docs
+  cancel-in-progress: false
+
+jobs:
+  publish-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "pyproject.toml"
+
+      # The 'docs' group provides zensical (pinned via uv.lock).
+      - name: Install dependencies
+        run: uv sync --frozen --group docs
+
+      - name: Build site
+        run: uv run zensical build --clean
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages

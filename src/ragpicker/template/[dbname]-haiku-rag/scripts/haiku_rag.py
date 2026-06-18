@@ -25,6 +25,11 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+# Imports from `haiku-rag` are deferred to permit the skill script
+# minimal functionality in the absence of the skill, typically when
+# run directly under Python rather than via `uv`. In such environments,
+# the skill can run long enough to report the problem and exit cleanly.
+
 # The database stem is substituted by the generator from the source
 # ``<stem>.lancedb`` directory name. Both the LanceDB database and the
 # embedded ``haiku.rag.yaml`` live in the skill's ``assets/`` directory.
@@ -43,13 +48,29 @@ def asset_paths(script_file: str = __file__) -> tuple[Path, Path]:
 
 def load_config(config_path: Path):
     """Build an ``AppConfig`` from the bundled ``haiku.rag.yaml``."""
-    from haiku.rag.config import AppConfig, load_yaml_config
+    from haiku.rag import config as hr_config
 
-    return AppConfig.model_validate(load_yaml_config(config_path))
+    return hr_config.AppConfig.model_validate(
+        hr_config.load_yaml_config(config_path)
+    )
 
 
 class SkillError(Exception):
-    """A user-facing error from running this skill (e.g. a version mismatch)."""
+    """User-facing error from running this skill."""
+
+
+class HaikuRAGMigrationRequired(SkillError):
+    def __init__(self, db_stem, exc_str):
+        self.db_stem = db_stem
+        self.exc_str = exc_str
+        super().__init__(
+            f"Embedded '{db_stem}' database / runtime haiku-rag version "
+            f"mismatch: {exc_str} Under Soliplex (and other embedding hosts), "
+            f"skill scripts run with the host's Python interpreter, so the "
+            f"host's haiku-rag must match the embedded database. Pin the host "
+            f"to the database's version, or regenerate this skill with "
+            f"'--haiku-rag-version <runtime>' to migrate the embedded copy."
+        )
 
 
 @asynccontextmanager
@@ -65,27 +86,17 @@ async def open_kb(db_path: Path, config):
     failure (it would surface to the agent as an empty result) into an
     actionable ``SkillError``.
     """
-    from haiku.rag.client import HaikuRAG
+    from haiku.rag import client as hr_client
+    from haiku.rag.store import exceptions as hr_store_exceptions
 
     try:
-        from haiku.rag.store.exceptions import MigrationRequiredError
-    except ImportError:  # pragma: no cover - unexpected runtime layout
-        MigrationRequiredError = ()
-
-    try:
-        async with HaikuRAG(
+        async with hr_client.HaikuRAG(
             db_path=db_path, config=config, read_only=True
         ) as rag:
             yield rag
-    except MigrationRequiredError as exc:
-        raise SkillError(
-            f"Embedded '{DB_STEM}' database / runtime haiku-rag version "
-            f"mismatch: {exc} Under Soliplex (and other embedding hosts), "
-            f"skill scripts run with the host's Python interpreter, so the "
-            f"host's haiku-rag must match the embedded database. Pin the host "
-            f"to the database's version, or regenerate this skill with "
-            f"'--haiku-rag-version <runtime>' to migrate the embedded copy."
-        ) from exc
+
+    except hr_store_exceptions.MigrationRequiredError as exc:
+        raise HaikuRAGMigrationRequired(DB_STEM, str(exc)) from exc
 
 
 def format_citation(citation) -> str:
@@ -109,9 +120,7 @@ def format_citation(citation) -> str:
     return "\n".join(lines)
 
 
-async def run_search(
-    query: str, limit: int | None, filter: str | None
-) -> str:
+async def run_search(query: str, limit: int | None, filter: str | None) -> str:
     """Hybrid-search the knowledge base and format results for an agent."""
     db_path, config_path = asset_paths()
     config = load_config(config_path)
@@ -133,14 +142,14 @@ async def run_cite(chunk_ids: list[str]) -> str:
     prior in-memory search state, so every chunk ID is resolved directly from
     the database.
     """
-    from haiku.rag.store.models.chunk import SearchResult
-    from haiku.rag.store.models.citation import resolve_citations
+    from haiku.rag.store.models import chunk as hrsm_chunk
+    from haiku.rag.store.models import citation as hrsm_citation
 
     db_path, config_path = asset_paths()
     config = load_config(config_path)
     async with open_kb(db_path, config) as rag:
         normalized = [cid.strip("[]") for cid in chunk_ids]
-        synthetic: list[SearchResult] = []
+        synthetic: list[hrsm_chunk.SearchResult] = []
         doc_cache: dict[str, object] = {}
         for cid in normalized:
             chunk = await rag.get_chunk_by_id(cid)
@@ -152,9 +161,11 @@ async def run_cite(chunk_ids: list[str]) -> str:
             doc = doc_cache[did]
             chunk.document_uri = doc.uri if doc else None
             chunk.document_title = doc.title if doc else None
-            synthetic.append(SearchResult.from_chunk(chunk, score=1.0))
+            synthetic.append(
+                hrsm_chunk.SearchResult.from_chunk(chunk, score=1.0),
+            )
 
-        citations = resolve_citations(normalized, synthetic)
+        citations = hrsm_citation.resolve_citations(normalized, synthetic)
         for position, citation in enumerate(citations, start=1):
             if citation.index is None:
                 citation.index = position
@@ -216,11 +227,13 @@ def main(argv: list[str] | None = None) -> int:
             print(asyncio.run(run_search(args.query, args.limit, args.filter)))
         elif args.command == "cite":
             print(asyncio.run(run_cite(args.chunk_ids)))
-        else:  # pragma: no cover - argparse enforces a valid subcommand
+        else:  # pragma: NO COVER - argparse enforces a valid subcommand
             return 2
+
     except SkillError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
     return 0
 
 

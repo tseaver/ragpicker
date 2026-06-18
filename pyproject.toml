@@ -1,29 +1,105 @@
+# Packaging for `ragpicker`: generate a self-contained, filesystem-based
+# agentskills.io skill that wraps a haiku-rag-built LanceDB RAG database.
+# See README.md for scope and docs/ for the design overview.
+#
+# Dependency groups (https://docs.astral.sh/uv/concepts/dependencies):
+#   - dev:  test + lint tooling (`uv run pytest`, `uv run ruff`, etc.)
+#   - docs: zensical, which builds the documentation site under docs/ into
+#           site/ (`uv run zensical build`) and drives the docs CI workflow.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "ragpicker"
 version = "0.1.0"
 description = "Generate filesystem-based agentskills.io skill around a haiku-rag RAG database"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
+authors = [{ name = "Tres Seaver", email = "tseaver@palladion.com" }]
+keywords = ["haiku-rag", "agentskills", "skills", "rag", "lancedb"]
+
 dependencies = [
     "pylance",
     "packaging",
 ]
 
+[project.urls]
+Homepage = "https://tseaver.github.io/ragpicker/"
+Repository = "https://github.com/tseaver/ragpicker"
+
 [project.scripts]
 ragpicker = "ragpicker.generator:main"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[dependency-groups]
+dev = [
+    "coverage",
+    "pymarkdownlnt",
+    "pytest",
+    "pytest-cov",
+    # haiku-rag-slim is exercised by the generated-wrapper tests, which import
+    # haiku.rag to drive its version-mismatch guard.
+    "haiku-rag-slim==0.48.1",
+    # Pinned to match the ruff-pre-commit hook rev in .pre-commit-config.yaml,
+    # so `uv run ruff format` and the commit hook never disagree.
+    "ruff==0.15.10",
+]
+docs = [
+    "zensical",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ragpicker"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+pythonpath = ["."]
+python_files = "test_*.py"
+testpaths = ["tests/unit"]
+addopts = "--cov=ragpicker --cov=tests/unit --cov-branch --cov-fail-under=100"
 
-[dependency-groups]
-dev = [
-    "pytest>=8",
-    "haiku-rag-slim==0.48.1",
+[tool.coverage.report]
+show_missing = true
+
+[tool.ruff]
+line-length = 79
+exclude = []
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    # flake8
+    "F",
+    # pycodestyle
+    "E",
+    # flake8-bugbear
+    "B",
+    # pyupgrade
+    "U",
+    # isort
+    "I",
+    # pandas vet
+    "PD",
+    # tryceratops
+    "TRY",
+    # flake8-pytest-style
+    "PT",
 ]
+ignore = [
+    "PT019",  # incorrecly flags '@mock.patch' args as fixtures
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "csv"
+
+[tool.pymarkdown]
+extensions.front-matter.enabled = true
+plugins.line-length.enabled = false             # md013
+plugins.no-duplicate-heading.enabled = false    # md024
+plugins.no-inline-html.enabled = false          # md033
+plugins.no-emphasis-as-heading.enabled = false  # md036
+plugins.first-line-heading.enabled = false      # md041
+plugins.code-block-style.enabled = false        # md046
