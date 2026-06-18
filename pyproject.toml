@@ -12,7 +12,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ragpicker"
-version = "0.1.0"
+version = "0.2dev0"
 description = "Generate filesystem-based agentskills.io skill around a haiku-rag RAG database"
 readme = "README.md"
 license = "MIT"
