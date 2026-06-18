@@ -97,7 +97,9 @@ parametrize-names-type = "csv"
 
 [tool.pymarkdown]
 extensions.front-matter.enabled = true
+plugins.no-multiple-blanks.maximum = 2          # md012
 plugins.line-length.enabled = false             # md013
+plugins.blanks-around-headings.enabled = false  # md022
 plugins.no-duplicate-heading.enabled = false    # md024
 plugins.no-inline-html.enabled = false          # md033
 plugins.no-emphasis-as-heading.enabled = false  # md036
