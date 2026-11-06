@@ -23,10 +23,11 @@ Copyright &copy; Tres Seaver
 dev_addr = "127.0.0.1:8004"
 
 # Explicit navigation. Pages not listed here still build, but the sidebar
-# order/grouping below is the source of truth.
+# order is the source of truth (pipeline first, then the generator).
 # Reference: https://zensical.org/docs/setup/navigation/
 nav = [
     { "Home" = "index.md" },
+    { "Ingesting documents" = "ingesting.md" },
     { "Generating a skill" = "generating.md" },
     { "Version pinning" = "versions.md" },
 ]

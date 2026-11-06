@@ -27,6 +27,9 @@ directory (`<stem>.lancedb`), `ragpicker`:
 
 ## Next steps
 
+- **[Ingesting documents](ingesting.md)** — producing the database first:
+  one-shot `add-src`, the `haiku-ingester` service, embedding models and
+  docling-serve.
 - **[Generating a skill](generating.md)** — the CLI and what it produces.
 - **[Version pinning](versions.md)** — how the embedded database and runtime
   are kept in sync.

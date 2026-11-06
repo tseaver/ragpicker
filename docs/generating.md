@@ -1,5 +1,8 @@
 # Generating a skill
 
+Assumes you already have a haiku.rag-built database; see
+[Ingesting documents](ingesting.md) for producing and refreshing one.
+
 ```bash
 uv run ragpicker \
     --config path/to/haiku.rag.yaml \
