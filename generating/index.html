@@ -16,7 +16,7 @@
         <link rel="canonical" href="https://tseaver.github.io/ragpicker/generating/">
       
       
-        <link rel="prev" href="./..">
+        <link rel="prev" href="../ingesting/">
       
       
         <link rel="next" href="../versions/">
@@ -264,6 +264,32 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../ingesting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Ingesting documents
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -482,6 +508,8 @@
 
 
 <h1 id="generating-a-skill">Generating a skill<a class="headerlink" href="#generating-a-skill" title="Permanent link">&para;</a></h1>
+<p>Assumes you already have a haiku.rag-built database; see
+<a href="../ingesting/">Ingesting documents</a> for producing and refreshing one.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ragpicker<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span>--config<span class="w"> </span>path/to/haiku.rag.yaml<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>--db<span class="w"> </span>path/to/handbook.lancedb<span class="w"> </span><span class="se">\</span>
@@ -561,7 +589,7 @@ instead of failing silently.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="./.." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+          <a href="../ingesting/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Ingesting documents">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
@@ -571,7 +599,7 @@ instead of failing silently.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Home
+                Ingesting documents
               </div>
             </div>
           </a>

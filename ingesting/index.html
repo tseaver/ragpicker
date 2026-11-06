@@ -1,0 +1,906 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Generate a self-contained, filesystem-based agentskills.io skill that wraps a haiku-rag-built LanceDB RAG database.
+">
+      
+      
+        <meta name="author" content="Tres Seaver">
+      
+      
+        <link rel="canonical" href="https://tseaver.github.io/ragpicker/ingesting/">
+      
+      
+        <link rel="prev" href="./..">
+      
+      
+        <link rel="next" href="../generating/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="zensical-0.0.45">
+    
+    
+      
+        <title>Ingesting documents - ragpicker</title>
+      
+    
+    
+      
+        
+      
+      <link rel="stylesheet" href="../assets/stylesheets/modern/main.fba56155.min.css">
+      
+        
+          
+        
+        <link rel="stylesheet" href="../assets/stylesheets/modern/palette.dfe2e883.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,500,500i,700,700i%7CJetBrains+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_scope.pathname.endsWith("/")||(__md_scope=new URL(__md_scope.pathname+"/",location)),__md_hash=e=>[...e].reduce(((e,t)=>(e<<5)-e+t.charCodeAt(0)),0),__md_get=(e,t=localStorage,_=__md_scope)=>JSON.parse(t.getItem(_.pathname+"."+e)),__md_set=(e,t,_=localStorage,a=__md_scope)=>{try{_.setItem(a.pathname+"."+e,JSON.stringify(t))}catch(e){}},document.documentElement.setAttribute("data-platform",navigator.platform)</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer" aria-label="Navigation"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ingesting-documents" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="./.." title="ragpicker" class="md-header__button md-logo" aria-label="ragpicker" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Navigation">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-menu" viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ragpicker
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Ingesting documents
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="none" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search" aria-label="Search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog" aria-label="Search">
+  <button type="button" class="md-search__button">
+    Search
+  </button>
+</div>
+      
+    
+    <div class="md-header__source">
+      
+        <a href="https://github.com/tseaver/ragpicker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tseaver/ragpicker
+  </div>
+</a>
+      
+    </div>
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="./.." title="ragpicker" class="md-nav__button md-logo" aria-label="ragpicker" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-book-open" viewBox="0 0 24 24"><path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+
+    </a>
+    ragpicker
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tseaver/ragpicker" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2026 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tseaver/ragpicker
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="./.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Home
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Ingesting documents
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="././" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Ingesting documents
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-shot-haiku-rag-add-src" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One-shot: <code>haiku-rag add-src</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-haiku-ingester" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Continuous: <code>haiku-ingester</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous: haiku-ingester">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-writer-per-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One writer per database
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#picking-and-running-an-embedding-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Picking and running an embedding model
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-with-docling-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Converting with docling-serve
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checkup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Checkup
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-database-to-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From database to skill
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Generating a skill
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../versions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Version pinning
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  
+                    
+                    
+                    
+                      
+                    
+                    
+                      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+                      <div class="md-sidebar-button__wrapper">
+                        <label class="md-sidebar-button" for="__toc"></label>
+                      </div>
+                    
+                  
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="On this page">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      On this page
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-shot-haiku-rag-add-src" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One-shot: <code>haiku-rag add-src</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-haiku-ingester" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Continuous: <code>haiku-ingester</code>
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous: haiku-ingester">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-writer-per-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        One writer per database
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#picking-and-running-an-embedding-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Picking and running an embedding model
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#converting-with-docling-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Converting with docling-serve
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checkup" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Checkup
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-database-to-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        From database to skill
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+  
+  
+
+
+<h1 id="ingesting-documents">Ingesting documents<a class="headerlink" href="#ingesting-documents" title="Permanent link">&para;</a></h1>
+<p><code>ragpicker</code> wraps an existing database; it converts, chunks and embeds
+nothing itself. This page covers producing that database — the ingestion
+side of <code>haiku.rag</code> — before handing it to the generator. It targets
+haiku.rag <strong>0.109.0</strong> (current stable); younger features it relies on are
+marked with the release that added them.</p>
+<h2 id="one-shot-haiku-rag-add-src">One-shot: <code>haiku-rag add-src</code><a class="headerlink" href="#one-shot-haiku-rag-add-src" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>haiku-rag<span class="w"> </span>init<span class="w"> </span>--db<span class="w"> </span>handbook.lancedb
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>haiku-rag<span class="w"> </span>add-src<span class="w"> </span>/srv/handbook-src/
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>haiku-rag<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;attention mechanism&quot;</span>
+</span></code></pre></div>
+<ul>
+<li><code>add-src</code> takes a file, a URL, a directory (walked recursively, ingesting
+  every file whose extension docling or the text reader supports), or a
+  <code>s3://</code> object (requires the <code>[s3]</code> extra) — anything the ingester can
+  watch, without setting the ingester up.</li>
+<li>Re-ingesting an unchanged file is cheap: change detection by stored hashes
+  skips the conversion/embedding entirely.</li>
+</ul>
+<p>This is the whole story for a handbook that changes rarely or never.</p>
+<h2 id="continuous-haiku-ingester">Continuous: <code>haiku-ingester</code><a class="headerlink" href="#continuous-haiku-ingester" title="Permanent link">&para;</a></h2>
+<p>For a corpus that keeps changing, a service watches sources and keeps the
+database in step: retries with backoff, a dead-letter queue, a control plane
+and a dashboard. Install the <code>[ingester]</code> extra (available since 0.50.0; the
+<code>ingester.databases</code> shape below needs 0.99.0+ — a configuration carrying the
+older <code>ingester.sources</code> fails to load on current releases):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s1">&#39;haiku.rag-slim[ingester]&#39;</span><span class="w">   </span><span class="c1"># or &#39;haiku.rag[ingester]&#39;</span>
+</span></code></pre></div>
+<p>Sources are configured under the database they feed:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">lancedb</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">databases</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">handbook</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${HAIKU_RAG_CONFIG_DIR}/handbook.lancedb</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">ingester</span><span class="p">:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">databases</span><span class="p">:</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">handbook</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">      </span><span class="nt">sources</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fs</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">          </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">handbook</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">          </span><span class="nt">root</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/srv/handbook-src</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">          </span><span class="nt">delete_orphans</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>haiku-ingester<span class="w"> </span>serve<span class="w">          </span><span class="c1"># watch + sweep; control plane at 127.0.0.1:8765</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>haiku-ingester<span class="w"> </span>run-batch<span class="w">      </span><span class="c1"># one sweep + drain, then exit: CI or cron</span>
+</span></code></pre></div>
+<ul>
+<li>Source types: <code>fs</code>, <code>http</code>, <code>s3</code>, <code>webdav</code>, each with gitignore-style
+  include/ignore filters and size limits. A per-source circuit breaker and a
+  startup reconciliation between queue and store round out the machinery.</li>
+<li><code>delete_orphans: true</code> drops documents whose file has disappeared from the
+  source; without it, stale documents stay searchable.</li>
+<li><code>run-batch --dry-run</code> writes a changeset manifest instead of ingesting;
+  <code>--manifest</code> replays one frozen; <code>--retry dead</code> re-queues failures.</li>
+<li>The control plane requires <code>ingester.api.auth_token</code> when it is not bound
+  to loopback.</li>
+</ul>
+<h3 id="one-writer-per-database">One writer per database<a class="headerlink" href="#one-writer-per-database" title="Permanent link">&para;</a></h3>
+<p>The ingester owns every database it writes; LanceDB allows exactly one
+writing process and any number of read-only consumers. Everything else —
+the MCP server, the generated skill — opens it read-only, and ragpicker's
+skill embeds a <em>copy</em>, so it never contends with the writer.</p>
+<h2 id="picking-and-running-an-embedding-model">Picking and running an embedding model<a class="headerlink" href="#picking-and-running-an-embedding-model" title="Permanent link">&para;</a></h2>
+<p>The embedder is configuration — <code>embeddings.model</code> in <code>haiku.rag.yaml</code> —
+and a plain CPU-only laptop is enough for any of these:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Shape</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ollama (default)</td>
+<td>local server</td>
+<td><code>provider: ollama</code>, <code>name: qwen3-embedding:4b</code>, <code>vector_dim: 2560</code>; <code>ollama pull qwen3-embedding:4b</code></td>
+</tr>
+<tr>
+<td>In-process</td>
+<td>no server</td>
+<td><code>provider: sentence-transformers</code>, <code>name: all-MiniLM-L6-v2</code>, <code>vector_dim: 384</code> (<code>cross-encoder</code> extra, on <code>haiku.rag</code>)</td>
+</tr>
+<tr>
+<td>OpenAI-compatible</td>
+<td>localhost server</td>
+<td><code>provider: openai</code>, <code>base_url: http://localhost:1234/v1</code> (LM Studio, vLLM)</td>
+</tr>
+</tbody>
+</table>
+<p>Rules that outlive the choice:</p>
+<ul>
+<li><code>vector_dim</code> must be the model's true output dimension and is frozen at
+  database creation: the database records provider, model name, dimension
+  and the optional query/document prefixes, and checks them on every open.
+  Changing the model later is a <code>haiku-rag rebuild</code>, not a config edit.</li>
+<li>The <em>URL</em> is not part of the recorded identity: pointing an existing
+  database at the same model on a new host is a config edit alone.</li>
+<li>Hosted embedders (<code>voyageai</code>, <code>cohere</code>, public APIs) work, but whatever
+  runs the skill must reach the embedder at <em>query</em> time. Favor a
+  localhost model when the skill will travel to hosts you do not control.</li>
+<li>Only the <code>embeddings</code> section matters to a generated skill: its
+  <code>search</code>/<code>cite</code> never calls the QA or reranking models.</li>
+</ul>
+<h2 id="converting-with-docling-serve">Converting with docling-serve<a class="headerlink" href="#converting-with-docling-serve" title="Permanent link">&para;</a></h2>
+<p><code>docling-local</code>, the default converter, runs docling in-process and pulls
+the <code>docling</code> extra plus its layout/OCR models on first use — a heavy
+dependency for "Markdown in, search out". <code>docling-serve</code> offloads
+conversion (and chunking) to a REST service, so <code>haiku.rag-slim</code> runs
+without <code>docling</code> at all.</p>
+<p>The upstream image runs docling on CPU, and Markdown/HTML corpora need no
+OCR in the first place, so a CPU-only localhost deployment is the sweet
+spot:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span><span class="m">5001</span>:5001<span class="w"> </span>quay.io/docling-project/docling-serve:v1.38.2
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">processing</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">converter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docling-serve</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">chunker</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docling-serve</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nt">providers</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">docling_serve</span><span class="p">:</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:5001</span>
+</span></code></pre></div>
+<ul>
+<li>haiku.rag 0.109.0 is tested against docling-serve <strong>v1.38.2</strong>; pin the
+  image tag to that release line.</li>
+<li><code>do_ocr: false</code> (the docling-serve chunker sends it along) skips OCR
+  model downloads entirely for corpora whose text is already embedded.</li>
+<li><code>docling-local</code> remains the choice when pictures should come <em>from the
+  web</em>: <code>fetch_remote_images</code> and its header controls exist only there —
+  docling-serve stores <code>picture_data=NULL</code> for external <code>&lt;img&gt;</code> URLs.</li>
+<li>The reference deployment is haiku.rag's <code>examples/docker/
+  docker-compose.yml</code>, which pairs the slim image
+  (<code>ghcr.io/ggozad/haiku.rag-slim</code>, built with the ingester extra and
+  without <code>docling</code>) with docling-serve replicas. Size
+  <code>ingester.workers.worker_count</code> at 1–2× the number of <code>base_url</code>
+  entries.</li>
+</ul>
+<h2 id="checkup">Checkup<a class="headerlink" href="#checkup" title="Permanent link">&para;</a></h2>
+<p>Before handing the database over — and any time it misbehaves — have
+haiku.rag examine its own work:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>haiku-rag<span class="w"> </span>info<span class="w"> </span>--db<span class="w"> </span>handbook.lancedb<span class="w">     </span><span class="c1"># snapshot: counts, sizes,</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">                                         </span><span class="c1"># embedder, pending migrations</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>haiku-rag<span class="w"> </span>doctor<span class="w"> </span>--db<span class="w"> </span>handbook.lancedb<span class="w">   </span><span class="c1"># pass/warn/fail report</span>
+</span></code></pre></div>
+<p><code>doctor</code> checks table correspondence, orphaned chunks and references, chunk
+vector dimensions, embedder identity agreement, index coverage and pending
+migrations, and probes the endpoints the configuration names (Ollama models
+present, docling-serve reachable, API keys set). Every finding names its
+remedying command (<code>migrate</code>, <code>rebuild</code>, <code>create-index</code>, <code>vacuum</code>, ...).
+<code>--json</code> prints a machine-readable report; <code>--skip-providers</code> skips both the
+API-key check and network probes. The haiku.rag web app runs the same report
+in its doctor page, for browser-only operators.</p>
+<p>Details: <a href="https://ggozad.github.io/haiku.rag/cli/">https://ggozad.github.io/haiku.rag/cli/</a> (Database lifecycle:
+<code>info</code>, <code>doctor</code>).</p>
+<h2 id="from-database-to-skill">From database to skill<a class="headerlink" href="#from-database-to-skill" title="Permanent link">&para;</a></h2>
+<p>The skill embeds a <strong>snapshot copy</strong>: generation copies both the
+<code>.lancedb</code> directory and the <code>haiku.rag.yaml</code> config under the skill's
+<code>assets/</code>, leaving the ingester's database alone.</p>
+<ul>
+<li>Quiesce the writer first: the directory copy is made with ordinary file
+  copies, not atomically across tables. Right after a successful
+  <code>run-batch</code>, or with <code>serve</code> briefly stopped, is safe.</li>
+<li>Regeneration is the refresh path: when the ingester has ingested new
+  content (or versions have moved), re-run <a href="../generating/">ragpicker</a> —
+  the skill's copy gets replaced wholesale.</li>
+<li>Generate with <code>--version-from-project</code> when the skill will run under an
+  embedding host such as a Soliplex stack, so the embedded database
+  matches the haiku-rag <strong>that interpreter</strong> will open it with (see
+  <a href="../generating/">Generating</a> / <a href="../versions/">Version pinning</a>).</li>
+<li>Verify the embedded config's <code>embeddings.model</code> agrees with the
+  database's recorded identity (provider, name, <code>vector_dim</code>): a vector
+  dimension mismatch refuses to open; a same-dimension mismatch warns and
+  degrades retrieval. <code>haiku-rag doctor</code> performs the same check.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-circle-arrow-up" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="./.." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Home
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../generating/" class="md-footer__link md-footer__link--next" aria-label="Next: Generating a skill">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Generating a skill
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; Tres Seaver
+
+    </div>
+  
+  
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate":null,"base":"..","features":["announce.dismiss","content.code.annotate","content.code.copy","content.code.select","content.tabs.link","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.path","navigation.sections","navigation.top","navigation.tracking","search.highlight"],"search":"../assets/javascripts/workers/search.e2d2d235.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.6e5f0216.min.js"></script>
+      
+    
+  </body>
+</html>
